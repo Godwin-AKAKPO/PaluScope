@@ -1,10 +1,10 @@
 """PaluScope Studio V0 — démo Streamlit.
 
 Owners V0 :
-- Godwin : upload + affichage image / gris + histogramme  (godwin/streamlit-upload)
-- Bénoit : panneau QC + candidats + export                (benoit/streamlit-qc-panel)
+- Godwin : upload + affichage image / gris + histogramme
+- Bénoit : panneau QC + candidats + export JSON
 
-Cette version implémente UNIQUEMENT la partie Godwin.
+Les deux parties sont assemblées ici pour la démo V0 complète.
 """
 
 from __future__ import annotations
@@ -24,6 +24,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from paluscope.preprocess import to_gray  # noqa: E402
+from paluscope.report import (  # noqa: E402
+    build_report,
+    report_to_dataframe,
+    save_report_json,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -63,9 +68,15 @@ rgb = np.asarray(pil)  # uint8 (H, W, 3)
 gray = to_gray(rgb)
 
 # ---------------------------------------------------------------------------
-# Godwin : affichage côte à côte (RGB + gris)
+# Bénoit : construire le rapport QC + candidats (une seule fois)
 # ---------------------------------------------------------------------------
-col1, col2 = st.columns(2)
+report = build_report(rgb, source=uploaded.name)
+mask = report["_mask"]  # masque booléen pour l'affichage
+
+# ---------------------------------------------------------------------------
+# Affichage : RGB (Godwin) + gris (Godwin) + candidats (Bénoit)
+# ---------------------------------------------------------------------------
+col1, col2, col3 = st.columns(3)
 
 with col1:
     st.subheader("Image RGB")
@@ -81,6 +92,12 @@ with col2:
         f"min={gray.min():.3f} | max={gray.max():.3f} | mean={gray.mean():.3f}"
     )
 
+with col3:
+    # Bénoit : visualisation du masque de zones candidates
+    st.subheader("Zones candidates")
+    st.image(mask.astype(float), clamp=True, use_container_width=True)
+    st.caption(f"composantes connexes = {report['candidates']['n_candidates']}")
+
 # ---------------------------------------------------------------------------
 # Godwin : histogramme grayscale (aperçu distribution des intensités)
 # ---------------------------------------------------------------------------
@@ -95,10 +112,24 @@ st.pyplot(fig)
 plt.close(fig)  # libère la figure Matplotlib (important dans Streamlit)
 
 # ---------------------------------------------------------------------------
-# Bénoit (TODO) : panneau QC, masque candidats, export JSON
+# Bénoit : panneau indicateurs QC
 # ---------------------------------------------------------------------------
 st.divider()
-st.info(
-    "Prochaine étape (Bénoit) : indicateurs QC (netteté, exposition, contraste), "
-    "zones candidates et export du rapport JSON."
+st.subheader("Indicateurs de qualité (QC)")
+st.metric(
+    "Candidats (composantes connexes)",
+    report["candidates"]["n_candidates"],
 )
+# Tableau aplati (une ligne) pour lire mean/std/michelson/sharpness/expo…
+df = report_to_dataframe(report)
+st.dataframe(df, use_container_width=True)
+
+# ---------------------------------------------------------------------------
+# Bénoit : export du rapport JSON vers outputs/reports/
+# ---------------------------------------------------------------------------
+out_dir = ROOT / "outputs" / "reports"
+out_path = out_dir / f"report_{Path(uploaded.name).stem}.json"
+
+if st.button("Exporter le rapport JSON"):
+    saved = save_report_json(report, out_path)
+    st.success(f"Rapport écrit : `{saved}`")

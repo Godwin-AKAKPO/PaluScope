@@ -55,6 +55,7 @@ def load_rgb(path: str | Path) -> np.ndarray:
 
     # 4) BGR → RGB pour le reste du pipeline PaluScope
     rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+
     return rgb
 
 

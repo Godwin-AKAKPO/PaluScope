@@ -16,6 +16,7 @@ from __future__ import annotations
 import numpy as np
 from skimage.color import rgb2gray, rgb2hsv
 from skimage.exposure import equalize_hist, rescale_intensity
+from skimage.filters import unsharp_mask as _unsharp_mask
 from skimage.util import img_as_float
 
 
@@ -83,6 +84,16 @@ def stretch(gray01: np.ndarray) -> np.ndarray:
     Améliore le contraste si l'image n'utilise pas toute la plage dynamique.
     """
     return rescale_intensity(gray01)
+
+
+def sharpen(gray01: np.ndarray, amount: float = 1.5, radius: float = 1.0) -> np.ndarray:
+    """Masque flou : renforce les contours sans changer la géométrie.
+
+    image nette = image + amount × (image − image floue)
+    amount règle la force. Un amount trop grand crée des halos.
+    """
+    sharp = _unsharp_mask(np.clip(gray01, 0.0, 1.0), radius=radius, amount=amount)
+    return np.clip(sharp, 0.0, 1.0)
 
 
 def equalize(gray01: np.ndarray) -> np.ndarray:

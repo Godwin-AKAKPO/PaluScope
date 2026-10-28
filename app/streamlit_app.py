@@ -369,12 +369,6 @@ else:
         "Les cadres sont seulement des zones à regarder."
     )
 
-with col3:
-    # Bénoit : visualisation du masque de zones candidates
-    st.subheader("Zones candidates")
-    st.image(mask.astype(float), clamp=True, use_container_width=True)
-    st.caption(f"composantes connexes = {report['candidates']['n_candidates']}")
-
 # ---------------------------------------------------------------------------
 # Succession des opérations, dans l'ordre du code
 # ---------------------------------------------------------------------------

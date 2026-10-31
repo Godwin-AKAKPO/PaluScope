@@ -3,7 +3,7 @@
 ## Emplacement
 
 Placer les images d’exemple dans `data/raw/` (png/jpg).  
-Ces fichiers ne sont **pas** versionnés (voir `.gitignore`).
+Les images d’exemple sont versionnées dans le dépôt (les archives volumineuses comme `.zip` restent ignorées).
 
 ## Sources ouvertes (cahier des charges)
 

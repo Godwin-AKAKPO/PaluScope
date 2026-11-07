@@ -149,6 +149,31 @@ st.markdown(
             border-color: #d89e9a;
             color: #8d454c;
         }
+        [class*="st-key-card-"] {
+            height: 100%;
+            background: #ffffff;
+            border: 1px solid #ead4d1 !important;
+            border-radius: 14px !important;
+            padding: 1rem 1.1rem 1.05rem !important;
+            box-shadow: 0 2px 10px rgba(92, 52, 56, 0.05);
+            margin-bottom: 0.9rem;
+        }
+        [class*="st-key-card-"] [data-testid="stMetricLabel"] p {
+            font-size: 1.1rem;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+            color: #8d454c;
+        }
+        [class*="st-key-card-"] [data-testid="stMetricValue"] {
+            font-size: 2rem;
+            color: #3f2428;
+        }
+        [class*="st-key-card-"] .stMarkdown p {
+            font-size: 1rem;
+            line-height: 1.5;
+            color: #3f2428;
+            margin: 0.15rem 0 0;
+        }
     </style>
     """,
     unsafe_allow_html=True,
@@ -219,6 +244,77 @@ with st.sidebar:
         st.session_state.selection = None
         st.session_state.uploader_key += 1
         st.rerun()
+
+
+def _comparison_note(example_family: str | None, n_stains: int) -> tuple[str, str]:
+    """Phrase qui compare l'étiquette d'exemple au nombre de cadres."""
+    if example_family == "parasitée" and n_stains == 0:
+        return (
+            "watch",
+            "Cette cellule d'exemple est marquée « parasitée », mais aucun cadre n'apparaît. "
+            "Une tache trop pâle peut échapper au filtre : regardez l'image quand même.",
+        )
+    if example_family == "parasitée":
+        return (
+            "calm",
+            "Cette cellule d'exemple est marquée « parasitée », et des cadres ont été posés. "
+            "Un cadre montre une zone à regarder. Ce n'est pas la confirmation d'un parasite.",
+        )
+    if example_family == "non parasitée" and n_stains == 0:
+        return (
+            "calm",
+            "Cette cellule d'exemple est marquée « non parasitée », et aucun cadre n'a été posé. "
+            "Une tache très discrète peut tout de même être présente.",
+        )
+    if example_family == "non parasitée":
+        return (
+            "watch",
+            "Cette cellule d'exemple est marquée « non parasitée », et pourtant des cadres ont été posés. "
+            "Ce peut être un noyau ou un dépôt de colorant, pas forcément un parasite.",
+        )
+    return (
+        "calm",
+        "C'est votre fichier : il n'y a pas d'étiquette de référence. "
+        "Les cadres sont seulement des zones à regarder.",
+    )
+
+
+def _show_reading_dashboard(
+    report: dict,
+    reading,
+    *,
+    source_name: str,
+    example_family: str | None,
+) -> None:
+    """Les trois cartes d'origine, puis les autres indicateurs sur le même modèle."""
+    by_name = {row["Indicateur"]: row for row in reading.to_dict(orient="records")}
+    n_stains = int(report["candidates"]["n_candidates"])
+
+    st.subheader("Fiche de lecture")
+    st.caption(source_name)
+    items = [
+        ("Taches encadrées", "Taches repérées"),
+        ("Luminosité", "Luminosité"),
+        ("Netteté", "Netteté"),
+        ("Contraste", "Contraste"),
+        ("Variation des gris", "Variation des gris"),
+        ("Zones presque blanches", "Zones presque blanches"),
+        ("Zones presque noires", "Zones presque noires"),
+        ("Surface des taches", "Surface des taches"),
+    ]
+    for start in range(0, len(items), 2):
+        columns = st.columns(2, gap="medium")
+        for index, (column, (label, key)) in enumerate(zip(columns, items[start : start + 2])):
+            row = by_name[key]
+            with column.container(border=True, height=270, key=f"card-{start + index}"):
+                st.metric(label, row["Valeur"])
+                st.markdown(row["En clair"])
+
+    tone, note = _comparison_note(example_family, n_stains)
+    if tone == "watch":
+        st.warning(note)
+    else:
+        st.info(note)
 
 
 def _remember_upload(uploaded) -> None:
@@ -318,7 +414,6 @@ else:
     example_family = None
 
 st.title("Lecture en cours")
-st.caption(f"Image : `{source_name}`")
 
 # ---------------------------------------------------------------------------
 # Godwin : chargement en RGB (PIL → NumPy)
@@ -335,39 +430,6 @@ report = build_report(rgb, source=source_name)
 stages = candidate_stages(rgb)
 mask = stages["mask"]
 hsv = stages["hsv"]
-n_stains = int(report["candidates"]["n_candidates"])
-
-st.subheader("Fiche de lecture")
-metric_a, metric_b, metric_c = st.columns(3)
-metric_a.metric("Taches encadrées", n_stains)
-metric_b.metric("Luminosité", f"{report['quality']['mean']:.2f} sur 1")
-metric_c.metric("Netteté", f"{report['quality']['sharpness_laplacian']:.0f}")
-
-if example_family == "parasitée" and n_stains == 0:
-    st.warning(
-        "Cet exemple est étiqueté parasitée, mais aucun cadre n'a été posé. "
-        "La tache est peut-être trop pâle pour le filtre. Regardez la cellule quand même."
-    )
-elif example_family == "parasitée":
-    st.info(
-        "Cet exemple est étiqueté parasitée, et des cadres ont été posés. "
-        "Comparez-les à ce que vous voyez : un cadre n'est pas une confirmation."
-    )
-elif example_family == "non parasitée" and n_stains == 0:
-    st.info(
-        "Cet exemple est étiqueté non parasitée, et aucun cadre n'a été posé. "
-        "Une tache très discrète peut tout de même être présente."
-    )
-elif example_family == "non parasitée":
-    st.warning(
-        "Cet exemple est étiqueté non parasitée, et pourtant des cadres ont été posés. "
-        "Ce peut être un repère en trop : un noyau ou un dépôt de colorant."
-    )
-else:
-    st.info(
-        "Fichier personnel : il n'y a pas d'étiquette de référence. "
-        "Les cadres sont seulement des zones à regarder."
-    )
 
 # ---------------------------------------------------------------------------
 # Succession des opérations, dans l'ordre du code
@@ -513,25 +575,11 @@ show_pair(
     ]
 )
 
-# ---------------------------------------------------------------------------
-# Bénoit : panneau indicateurs QC
-# ---------------------------------------------------------------------------
-st.divider()
-st.subheader("Que disent les chiffres ?")
-st.caption(
-    "Lecture simple de la photo. Ce n'est pas un diagnostic, "
-    "et le nombre de taches n'est pas un nombre de parasites."
-)
-reading = interpret_report(report)
-st.dataframe(
-    reading,
-    hide_index=True,
-    width="stretch",
-    column_config={
-        "Indicateur": st.column_config.TextColumn("Indicateur", width="small"),
-        "Valeur": st.column_config.TextColumn("Valeur", width="small"),
-        "En clair": st.column_config.TextColumn("En clair", width="large"),
-    },
+_show_reading_dashboard(
+    report,
+    interpret_report(report),
+    source_name=source_name,
+    example_family=example_family,
 )
 
 # ---------------------------------------------------------------------------
